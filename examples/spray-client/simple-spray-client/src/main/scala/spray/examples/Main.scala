@@ -10,13 +10,18 @@ import spray.json.{JsonFormat, DefaultJsonProtocol}
 import spray.can.Http
 import spray.httpx.SprayJsonSupport
 import spray.client.pipelining._
+import spray.httpx.SprayJsonSupport
+import spray.json._
 import spray.util._
+
+import scala.concurrent.Await
+import scala.util.{Failure, Success}
 
 case class Elevation(location: Location, elevation: Double)
 case class Location(lat: Double, lng: Double)
 case class GoogleApiResult[T](status: String, results: List[T])
 
-object ElevationJsonProtocol extends DefaultJsonProtocol {
+object ElevationJsonProtocol extends DefaultJsonProtocol with spray.json.AdditionalFormats {
   implicit val locationFormat = jsonFormat2(Location)
   implicit val elevationFormat = jsonFormat2(Elevation)
   implicit def googleApiResultFormat[T :JsonFormat] = jsonFormat2(GoogleApiResult.apply[T])
@@ -32,7 +37,15 @@ object Main extends App {
 
   import ElevationJsonProtocol._
   import SprayJsonSupport._
+
   val pipeline = sendReceive ~> unmarshal[GoogleApiResult[Elevation]]
+  val rawJsonValuePipeline = sendReceive ~> unmarshal[JsObject]
+
+  val rs2 = rawJsonValuePipeline {
+    Get("http://maps.googleapis.com/maps/api/elevation/json?locations=27.988056,86.925278&sensor=false")
+  }
+  import scala.concurrent.duration._
+  println("Await.result(rs2) = " + Await.result(rs2, 10.seconds))
 
   val responseFuture = pipeline {
     Get("http://maps.googleapis.com/maps/api/elevation/json?locations=27.988056,86.925278&sensor=false")
